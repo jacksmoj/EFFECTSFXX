@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Node Port Test</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #f4f4f4;
+      font-family: sans-serif;
+      touch-action: manipulation;
+    }
+    .node {
+      position: absolute;
+      width: 200px;
+      height: auto;
+      min-height: 160px;
+      background: white;
+      border: 2px solid orange;
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      box-sizing: border-box;
+      font-size: 1.2em;
+      transition: background 0.2s, outline 0.2s;
+    }
+    .node:active {
+      background: #ffe5cc;
+    }
+    .node.selected {
+      outline: 4px solid limegreen;
+    }
+    .node.failed {
+      outline: 4px solid red;
+      animation: shake 0.3s;
+    }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+      100% { transform: translateX(0); }
+    }
+    .port {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      position: absolute;
+      z-index: 1;
+      box-shadow: 0 0 0 4px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+    .input-port {
+      background: yellow;
+      top: -16px;
+      left: calc(50% - 16px);
+    }
+    .output-port {
+      background: blue;
+      bottom: -16px;
+      left: calc(50% - 16px);
+    }
+    .port.selected {
+      box-shadow: 0 0 0 4px limegreen;
+    }
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+    }
+    path {
+      fill: none;
+      stroke: gray;
+      stroke-width: 3;
+    }
+    .overlay {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: #000;
+      color: #fff;
+      font-size: 1em;
+      border-radius: 6px;
+      pointer-events: none;
+      opacity: 0.8;
+      z-index: 10;
+    }
+    .question-input, .response-output, .question-button {
+      margin-top: 10px;
+      width: 100%;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+    .question-input {
+      height: 40px;
+    }
+    .question-button {
+      height: 36px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    .response-output {
+      height: 80px;
+      background: #eee;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="status">Step 1: Tap output</div>
+  <svg>
+    <path id="wire" />
+    <path id="preview" stroke-dasharray="5,5" />
+  </svg>
+
+  <div class="node" style="top: 50px; left: 50px;">
+    <div class="port input-port"></div>
+    Question:
+    <form id="questionForm">
+      <input type="text" class="question-input" placeholder="Type your question here" />
+      <button class="question-button" type="submit">Send</button>
+    </form>
+    <div class="port output-port"></div>
+  </div>
+
+  <div class="node" style="top: 250px; left: 300px;">
+    <div class="port input-port"></div>
+    Response:
+    <div class="response-output" id="responseBox">[Response will appear here]</div>
+    <div class="port output-port"></div>
+  </div>
+
+  <script>
+    const nodes = document.querySelectorAll('.node');
+    const ports = document.querySelectorAll('.port');
+    const wire = document.getElementById('wire');
+    const status = document.getElementById('status');
+    const questionForm = document.getElementById('questionForm');
+    const responseBox = document.getElementById('responseBox');
+    const questionInput = questionForm.querySelector('input');
+
+    let selectedPort = null;
+    let lastConnected = [];
+
+    const setStatus = msg => { status.textContent = msg; };
+
+    ports.forEach(port => {
+      port.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!selectedPort) {
+          if (port.classList.contains('output-port')) {
+            selectedPort = port;
+            port.classList.add('selected');
+            port.parentElement.classList.add('selected');
+            setStatus('Step 2: Tap input');
+          }
+        } else {
+          if (selectedPort === port) return;
+
+          const isOutputToInput = selectedPort.classList.contains('output-port') && port.classList.contains('input-port');
+
+          if (isOutputToInput) {
+            drawWire(selectedPort, port);
+            selectedPort.classList.remove('selected');
+            selectedPort.parentElement.classList.remove('selected');
+            port.classList.add('selected');
+            port.parentElement.classList.add('selected');
+            setTimeout(() => port.classList.remove('selected'), 500);
+            setTimeout(() => port.parentElement.classList.remove('selected'), 500);
+            setStatus('Connection made! Tap another output to start again.');
+            lastConnected = [selectedPort, port];
+          } else {
+            selectedPort.parentElement.classList.add('failed');
+            port.parentElement.classList.add('failed');
+            setStatus('Invalid connection');
+            setTimeout(() => {
+              selectedPort.parentElement.classList.remove('failed');
+              port.parentElement.classList.remove('failed');
+              setStatus('Step 1: Tap output');
+            }, 600);
+          }
+          selectedPort.classList.remove('selected');
+          selectedPort.parentElement.classList.remove('selected');
+          selectedPort = null;
+        }
+      });
+    });
+
+    document.body.addEventListener('click', () => {
+      if (selectedPort) {
+        selectedPort.classList.remove('selected');
+        selectedPort.parentElement.classList.remove('selected');
+        selectedPort = null;
+        setStatus('Step 1: Tap output');
+      }
+    });
+
+    const drawWire = (from, to) => {
+      const a = from.getBoundingClientRect();
+      const b = to.getBoundingClientRect();
+      const startX = a.left + 16 + window.scrollX;
+      const startY = a.top + 16 + window.scrollY;
+      const endX = b.left + 16 + window.scrollX;
+      const endY = b.top + 16 + window.scrollY;
+      const dx = Math.abs(endX - startX) * 0.5;
+      const path = `M ${startX} ${startY} C ${startX + dx} ${startY}, ${endX - dx} ${endY}, ${endX} ${endY}`;
+      wire.setAttribute('d', path);
+    };
+
+    const enableDragging = (node) => {
+      let offsetX = 0, offsetY = 0;
+      const startDrag = (x, y) => {
+        offsetX = x - node.offsetLeft;
+        offsetY = y - node.offsetTop;
+        const move = (e) => {
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          node.style.left = `${clientX - offsetX}px`;
+          node.style.top = `${clientY - offsetY}px`;
+          if (lastConnected.length === 2) drawWire(...lastConnected);
+        };
+        const stop = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', stop);
+          document.removeEventListener('touchmove', move);
+          document.removeEventListener('touchend', stop);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', stop);
+        document.addEventListener('touchmove', move);
+        document.addEventListener('touchend', stop);
+      };
+      node.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+      node.addEventListener('touchstart', e => {
+        if (e.target.tagName.toLowerCase() !== 'input' && e.target.tagName.toLowerCase() !== 'button') {
+          startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      });
+    };
+
+    nodes.forEach(enableDragging);
+
+    questionForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const prompt = questionInput.value.trim();
+      if (!prompt) return;
+      responseBox.textContent = 'Loading...';
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer placeholder'
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || '[No response]';
+      responseBox.textContent = reply;
+    });
+  </script>
+</body>
+</html>
