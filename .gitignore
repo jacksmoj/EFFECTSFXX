@@ -1,0 +1,8 @@
+# 🔐 Keep API keys safe
+config/.env
+
+# 🧹 Ignore temp/dev files
+scratch/
+.DS_Store
+*.log
+.vscode/
